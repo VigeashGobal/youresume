@@ -1,0 +1,76 @@
+const natural = require('natural');
+const { match } = require('assert')
+const TfIdf = natural.TfIdf;
+const { MongoClient } = require('mongodb');
+const client = new MongoClient(url);
+const dbName = 'youresume_data';
+
+
+// get user function that retrieves the user's data from the db 
+
+async function getuser(useremail) {
+    try {
+        await client.connect();
+        const db = client.db(dbName);
+        const collection = db.collection('users');
+        const data = await collection.find({Email: useremail}).toArray()
+        return data
+    } catch (err) {
+        console.log(err)
+    }
+};
+
+
+// function that retrieves the users data from the db then takes the description of the job and puts it into the td-idf model 
+then matches those keywords against whats in the cv and resume
+
+
+app.post('/appstrength', (request, response) => {
+
+    //frontend sends the role description and clientemail
+    
+    let description = JSON.stringify(request.body.data)
+    let clientvalid = JSON.stringify(request.body.email)
+    const creds2 = clientvalid.substring(1)
+    const creds3 = creds2.slice(0,-1)
+    
+    //retrive client data 
+    
+    getuser(creds3).then(res => {
+        let cvstring = res[0].additionalfields[0].coverletter
+        let resume = res[0].ResumeRaw.employer
+        for (let x = 0;x<resume.length;x++) {
+            cvstring += resume[x].description
+        }
+        
+        // take client cv and resume and concat it and push the role description into nlp model
+        
+        
+        let cvarray = cvstring.split(" ")
+        const tfidf = new TfIdf();
+        tfidf.addDocument(description)
+        let suggestedwords = []
+        let totals = 0
+        let matches = 0
+        
+        // check the list of terms against the cv and resume for matches
+        
+        
+        tfidf.listTerms(0).forEach(function(item) {
+            totals += 1
+            if (cvarray.includes(item.term)) {
+                matches += 1
+            }
+            if (!cvarray.includes(item.term) && item.tfidf < 0.4) {
+                suggestedwords.push(item.term)
+            }
+        });
+        
+        // send response back to frontend to show enduser
+        
+        
+        response.send({total: totals, match: matches, suggestions: suggestedwords})
+    }).catch(e => {
+        console.log(e)
+    })
+})
